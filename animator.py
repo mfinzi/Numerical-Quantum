@@ -9,30 +9,38 @@ from matplotlib import pyplot as plt;
 
 
 class Animator:
-    def __init__(self,particle):
-        self.fig = figure
-        self.psiAxe = self.fig.add_subplot(111)
-        #self.psiGraph.plot(np.arange(500),np.arange(500))
-        #self.alternateGraph = self.fig.add_subplot(211)
-        #self.alternateGraph.plot(np.arange(500),np.arange(500)**2)
+    def __init__(self,particle,mainFig,altFig):
+    	self.particle = particle
 
+    	# Setup the figures
+        self.psiFig = mainFig
+        self.alternateFig = altFig
+        self.psiAxe = self.psiFig.add_subplot(111)
+        self.alternateAxe = self.alternateFig.add_subplot(111)
+
+        # Graph is scaled based on the initial height of psi, and the x bounds
         peakPsi = max([-1*np.min(np.absolute(particle.psi)),np.max(np.absolute(particle.psi))])**2
-        # Graph is scaled based on the initial height of psi
         self.psiAxe.set_xlim(particle.X[0],particle.X[-1])
         self.psiAxe.set_ylim(-3*peakPsi,3*peakPsi)
         
-        self.line1, = self.psiAxe.plot([], [], lw=1) # '-o' optional
-        self.psiAxe.add_line(mpl.lines.Line2D(particle.X,.008*particle.Vx, color = 'k'))
+        # Scaling of the alternate graph depends on what type of solver it is using
+        # TODO add the scaling for the alternate graph
+
+        # Setup the empty line on the psigraph to hold psi*psi, and also the Vx on that graph
+        self.psiLine, = self.psiAxe.plot([], [], lw=1) # '-o' optional
+        self.psiVxLine = self.psiAxe.plot(particle.X, .008*particle.Vx,color = 'k')
         self.psiAxe.grid()
-        self.particle = particle
+        
+
+
         self.anim=None
         #self.txtBox = self.axe.text(.02, 0.90, '', transform=self.axe.transAxes)   
     def inits(self):
         
         #self.txtBox.set_text('')
-        self.line1.set_data([], [])
+        self.psiLine.set_data([], [])
         plt.plot(0) #Need to figure out why I need this line
-        return self.line1,
+        return self.psiLine,
         
     def update_line(self,t):
         x = self.particle.X
@@ -43,10 +51,10 @@ class Animator:
         #print "this step is %.7f" %(time.time()-self.ass)
         y= np.real(self.particle.getPsi_st_psi())
         #self.ass = time.time()
-        self.line1.set_data(x,y)
+        self.psiLine.set_data(x,y)
         #print "this step is %.7f" %(time.time()-t0)
         #self.txtBox.set_text('<E> = %.3f' %self.particle.getExpectedEnergy())
-        return self.line1,#, self.txtBox
+        return self.psiLine,#, self.txtBox
     
     def threadedAnimate(self):
         thread.start_new_thread(self.animate, ())

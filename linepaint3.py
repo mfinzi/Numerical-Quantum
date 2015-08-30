@@ -7,10 +7,9 @@ matplotlib.use("TkAgg")
 from matplotlib import pyplot as plt
 import time
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
-from matplotlib.figure import Figure
-from QM.qmproj.splitstepsolver import *
-from QM.qmproj.animator import *
-from QM.qmproj.creationfunctions import *
+from NumericalQuantum.splitstepsolver import *
+from NumericalQuantum.animator import *
+from NumericalQuantum.creationfunctions import *
 
 class topApp(tk.Tk):
     def __init__(self):
@@ -35,13 +34,18 @@ class MainPage(tk.Frame):
     def __init__(self, parent, controller):
         tk.Frame.__init__(self, parent)
         self.controller = controller
-        self.psiFig = Figure(figsize=(8,4), dpi=100)
-        self.extraFig = Figure(figsize=(8,4), dpi=100)
 
+        # The main page frame owns the two figures, the Animator and the Graph communicate
+        # through the figures
+        self.psiFig = mpl.figure.Figure(figsize=(8,4), dpi=100)
+        self.alternateFig = mpl.figure.Figure(figsize=(8,4), dpi=100)
+
+        # Initializing the particle into a default config, editable later
         myPart = Particle1d((lambda x: x*x*0.5)(np.linspace(-10,10,100)),gaussian(0,1,10)(np.linspace(-10,10,100)),
                         N=100,Lx=20.0,dt=.01,SOLVER=EigenSolver1d)
 
-        anim = Animator(myPart,self.psiFig)#,self.extraFig)
+        # This is the object that will push updates to the figure
+        anim = Animator(myPart,self.psiFig,self.alternateFig)
 
         self.initGrid()
 
@@ -58,8 +62,9 @@ class MainPage(tk.Frame):
 
 
 
-        constantContainer =tk.Frame(self, relief="sunken")
-
+        constantContainer = tk.Frame(self, relief="sunken")
+        mass = tk.DoubleVar()
+        massSlider = Slider(self)#tk.Scale(constantContainer,orient="v",from_=.01,to=100)#,label="Mass")
 
 
         solverContainer = tk.Frame(self, relief = "sunken")
@@ -74,11 +79,13 @@ class MainPage(tk.Frame):
 
 
         drawSpace = DrawableGraph(self.psiFig,self)
-        secondaryBox = FigureCanvasTkAgg(self.extraFig,self)
+        secondaryBox = FigureCanvasTkAgg(self.alternateFig,self)
 
 
 
         #Packing area
+        constantContainer.pack()
+        massSlider.pack()
         label.pack()
         quitButton.pack()
         inputContainer.pack()
@@ -89,7 +96,7 @@ class MainPage(tk.Frame):
         #anim.threadedAnimate()
 
     def initGrid(self):
-        ttk.Style().theme_use("xpnative")
+        #ttk.Style().theme_use("xpnative")
         self.pack(fill=tk.BOTH,expand=1)
 
         self.columnconfigure(1, weight=1)
@@ -121,7 +128,24 @@ class MainPage(tk.Frame):
         return function
 
 
+class Slider(tk.Frame):
+    def __init__(self, parent=None ):
+        tk.Frame.__init__(self, parent)
+        self.number = 0
+        self.slide= ttk.Scale(self)
+        # self.slide = tk.Scale(self, orient="v", command=self.setValue,
+        #                    length=200, sliderlength=20, resolution = .01,
+        #                    showvalue=0, tickinterval=2,
+        #                    fro=-2, to=2, font=('Arial',9))
+        self.text = tk.Label(self, font=('Arial',18))
+        self.slide.pack(side=tk.RIGHT, expand=1, fill=tk.X)
+        self.text.pack(side=tk.TOP, fill=tk.BOTH)
+        #self.unimap = {'4':u'\u2074','5':u'\u2075','6':u'\u2076',
+        #               '7':u'\u2077','8':u'\u2078','9':u'\u2079'}
 
+    def setValue(self, val):
+        self.number = (10**(int(val)))
+        self.text.configure(text='10%s' %0)
 
 
 # class ButtonDraw():
