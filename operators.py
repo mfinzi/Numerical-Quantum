@@ -1,7 +1,9 @@
 import numpy as np
-import scipy.linalg
-import scipy as sp
-		
+from scipy.linalg import eig,eigh,eig_banded
+
+# Operator and Derivative classes are used in the Finite Difference Eigen
+#  decomposition solver and the propogate solver
+
 class Operator(object):
 	""" The most general matrix formulated operator class,
 		the other operator classes inherit from this one"""
@@ -34,14 +36,14 @@ class Operator(object):
 
 	def uncertainty(self,vector):
 		""" as you would expect, \int_{-\inf}^{\inf} \psi^* A_{op} \psi dx"""
-		expASqrd = np.vdot(vector,self.operate(self.operate(vector)))*self.dx
+		expASqrd = np.real(np.vdot(vector,self.operate(self.operate(vector))))*self.dx
 		return np.sqrt(expASqrd - self.expValue(vector)**2)
 
 	def computeEigenFunctions(self):
 		if self.isHermitian():
-			eigenRoutine = sp.linalg.eigh
+			eigenRoutine = eigh
 		else:
-			eigenRoutine = sp.linalg.eig
+			eigenRoutine = eig
 
 		lambdas,basis = eigenRoutine(self.matrix,overwrite_a=True)
 		
@@ -65,7 +67,7 @@ class BandedOp(Operator): #Must also be hermitian
 		if jRange: sel='v'
 		else: sel ='a' 
 
-		lambdas,basis = sp.linalg.eig_banded(self.bandedMatrix,lower=True, check_finite=False,
+		lambdas,basis = eig_banded(self.bandedMatrix,lower=True, check_finite=False,
 					overwrite_a_band=True, select=sel, select_range = jRange)
 		basis/=np.sqrt(self.dx) #For normalization
 		return lambdas,basis
@@ -113,15 +115,17 @@ class MomentumOp(BandedOp):
 
 class HamiltonianOp(BandedOp):
 
-	STENCIL_TABLE = np.array([-2.0,1.0,-5/2.0,4/3.0,\
-					-1/12.0,-49/18.0,3/2.0,-3/20.0,1/90.0])
-	SIGMA_CUTOFF = 15
+	STENCIL_TABLE = np.array([-2.0,1.0,-5/2.,4/3.,\
+					-1/12.,-49/18.,3/2.,-3/20.,1/90.])
+	SIGMA_CUTOFF = 10
 
 	def __init__(self,particle):
 		self.dx = particle.dx
 		self.bandedMatrix = self.getDiagonals(particle)
 		self.cutOffEnergy = self.expValue(particle.psi)+\
-			HamiltonianOp.SIGMA_CUTOFF*self.uncertainty(particle.psi)
+			HamiltonianOp.SIGMA_CUTOFF*self.uncertainty(particle.psi)#+50??
+		#print self.cutOffEnergy
+		#print self.expValue(particle.psi)
 	#I could make further optimization by overriding operate with specialized
 	# But it may not be necessary
 	def getDiagonals(self,P):

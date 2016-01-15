@@ -1,15 +1,11 @@
+import time,sys
 import numpy as np
-import scipy.fftpack
-import scipy.linalg
-import scipy.misc
-import scipy as sp
-from QM.qmproj.operators import *
-import time
-import sys
-import matplotlib
-from matplotlib import pyplot as plt;
+from scipy.fftpack import fft, ifft
+from scipy.misc import factorial
 
-class Particle1d:
+from operators import *
+
+class Particle1d(object):
 
 	def __init__(self,Vx,psi0,N,Lx,dt,SOLVER,consts=[1,1],stencilNum=1,mEAO=1):
 		self.stencilNum=stencilNum;
@@ -28,7 +24,7 @@ class Particle1d:
 		self.momOp = MomentumOp(self)
 		self.hamOp = HamiltonianOp(self)
 		self.matrExpApproxOrder = mEAO
-		
+		self.solverClass = SOLVER
 		self.solver = SOLVER(self)
 		#try: self.solver = SOLVER(self) #For example self.solver=splitStepper1d(self)
 		#except: print "not a valid solver", sys.exc_info()
@@ -49,17 +45,27 @@ class Particle1d:
 				resize = True 				# Set resize flag
 			if (key=="SOLVER" or key=="stencilNum" or (resize)):
 				resolve = True				# Set resolve flag
+			if (key=="SOLVER"): 			# Change the solver type
+				self.solverClass = value 
+			if (key == "psi"):
+				resolve = True
+			if (key == "Vx"):
+				resize = True
+				resolve = True
 
 		if resize:
+
 			self.Lx = float(self.Lx) 		# For safety
 			self.dx = self.Lx/self.N; 		# MAKE SURE Lx IS A FLOAT!!!!!!
-			self.X = np.linspace(-self.Lx/2,self.Lx/2,self.N)
+			self.X = np.linspace(-self.Lx/2,self.Lx/2,self.N);
+			#self.Vx[np.abs(self.X)>9.9]=10000     # Add hoc modification to prevent wraparound
 			self.xOp = XOP(self)			# Since the dimensions changed,
-			self.momOp = Momentum(self)		# We need to update the operators
-			self.hamOp = Hamiltonian(self)
+			self.momOp = MomentumOp(self)		# We need to update the operators
+			self.hamOp = HamiltonianOp(self)
+			print "resize"
 
 		if resolve:
-			try: self.solver = SOLVER(self) # Recreate the solver
+			try: self.solver = self.solverClass(self) # Recreate the solver
 			except: print "not a valid solver",sys.exc_info()
 
 	def step(self):
@@ -67,6 +73,9 @@ class Particle1d:
 
 	def getPsi(self):
 		return self.psi
+
+	def getV(self):
+		return self.Vx
 
 	def getPsi_st_psi(self):
 		return np.real(np.conj(self.psi)*self.psi)
@@ -89,7 +98,8 @@ class BaseSolver(object):
 
 
 class SplitStepper1d(BaseSolver):
-
+	""" Implements the Split Step Fourier method, which is well explained in Jake VanderPlas's blog
+		at https://jakevdp.github.io/blog/2012/09/05/quantum-python/ """
 	def __init__(self,P):
 		self.name="split"
 		self.fPsi = None
@@ -98,19 +108,24 @@ class SplitStepper1d(BaseSolver):
 
 		self.dk = 2*np.pi/P.Lx
 		self.kx = np.array([np.arange(0,P.N/2),np.arange(-P.N/2,0)]).ravel()*self.dk#+self.k0
-		#print self.kx[511],self.kx[512]
-	def quarterStpX(self,P):
+		self.stepsPerStep = 20
+		self.subDt = P.dt/self.stepsPerStep
+		#Precompute the halfStepX exponential
+		self.halfXOperation = np.exp(P.Vx*(-1j*self.subDt/(2*P.hbar)))
+		#Precompute the quarterStepK exponential
+		self.quarterKOperation = np.exp((self.kx**2)*(self.subDt*-1j*P.hbar/(8*P.mass)))
+	def halfStpX(self,P):
 		# We simply perform the Vx (diagonal) operation in x space
-		P.psi *= np.exp(-1j*P.Vx*P.dt/(4*P.hbar))
+		P.psi *= self.halfXOperation
 
-	def halfStpK(self,P):
+	def quarterStpK(self,P):
 
 		# Recenter Psi in k space, shift fpsi backwards by k0, fpsi(k) -> fpsi(k+k0)
-		self.fPsi = np.fft.fft(P.psi*np.exp(-1j*self.k0))*P.dx/np.sqrt(2*np.pi)
+		self.fPsi = fft(P.psi*np.exp(-1j*self.k0))/np.sqrt(2*np.pi)
 		# Then account for that shifting in self.kx by adding in self.k0
 		#self.kx -=self.k0
 		# Perform the kinetic energy T step in fourier space
-		stpFPsi = np.exp(self.kx*self.kx*P.dt*-1j*P.hbar/(4*P.mass))*self.fPsi
+		self.fPsi *= self.quarterKOperation
 		# Then bring kx back to its unshifted array
 		
 		
@@ -119,7 +134,7 @@ class SplitStepper1d(BaseSolver):
 		#self.kx -= self.k0
 		#print self.k0
 		# Finally we update psi, undoing the kspace shift
-		P.psi = np.fft.ifft(stpFPsi)*np.exp(+1j*self.k0)*np.sqrt(2*np.pi)/P.dx
+		P.psi = ifft(self.fPsi)*np.exp(+1j*self.k0)*np.sqrt(2*np.pi)
 
 		#self.kx-=self.k0
 		# Update k0 while we are in k space 
@@ -129,10 +144,11 @@ class SplitStepper1d(BaseSolver):
 		#self.kx+=self.k0
 
 	def fullStep(self,particle):
-		particle.t+=particle.dt
-		self.quarterStpX(particle);
-		self.halfStpK(particle);
-		self.quarterStpX(particle);
+		for i in np.arange(self.stepsPerStep):
+			particle.t+=self.subDt
+			self.quarterStpK(particle);
+			self.halfStpX(particle);
+			self.quarterStpK(particle);
 
 	def getExpectedMomentum(self,particle):
 		""" Slightly more efficient O(2n) implementation since p is diagonal in kspace"""
@@ -140,7 +156,7 @@ class SplitStepper1d(BaseSolver):
 
 
 class PropogateSolver1d(BaseSolver):
-
+	""" There is some numerical instability, need to investigate further"""
 	def __init__(self,particle):
 		self.name="prop"
 
@@ -151,12 +167,16 @@ class PropogateSolver1d(BaseSolver):
 		particle.t+=particle.dt 			
 		temporaryPsi = np.copy(particle.psi)  # We don't want a reference to psi
 		for i in np.arange(1,particle.matrExpApproxOrder+1):
-			expansionCoeff =(((-1j*particle.dt/particle.hbar)**i)/sp.misc.factorial(i))
+			expansionCoeff =(((-1j*particle.dt/particle.hbar)**i)/factorial(i))
 			temporaryPsi += expansionCoeff*particle.hamOp.repOperate(particle.psi,i)
 		particle.psi = temporaryPsi
 
 
 class EigenSolver1d(BaseSolver):
+	""" Performs the decomposition of the wavefunction into the basis of the first N
+		eigenfunctions. Essentially performs the diagonalization of the Hamiltonian
+		operator, discretized by a finite difference approximation in the Operators file.
+		Time evolution is computed from the matrix exponential of the Hamiltonian matrix"""
 
 	def __init__(self,particle):
 		self.name="eigen"
