@@ -8,10 +8,10 @@ import FileDialog
 import Tkinter as tk
 import ttk
 import numpy as np
-import matplotlib
-matplotlib.use("TkAgg")
-from matplotlib import pyplot as plt
-from matplotlib import patheffects
+from matplotlib import use; use("TkAgg")
+from matplotlib.pyplot import xkcd
+from matplotlib.figure import Figure
+#from matplotlib import patheffects
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
 from scipy.ndimage import zoom
 from scipy.signal import tukey
@@ -55,7 +55,7 @@ class MainPage(tk.Frame):
         
         # The main page frame owns the two figures, the Animator and the Graph communicate
         # through the figures
-        self.psiFig = mpl.figure.Figure(figsize=(8,8), dpi=100)#10
+        self.psiFig = Figure(figsize=(8,6.5), dpi=100)#10# 8,8
         # Initializing the particle into a default config, editable later
         #self.myPart = Particle1d((lambda x: x*x*0.5)(np.linspace(-10,10,2000)),gaussian(0,1,10)(np.linspace(-10,10,2000)),
         #                N=2000,Lx=20.0,dt=.01,SOLVER=EigenSolver1d)
@@ -204,6 +204,11 @@ class MainPage(tk.Frame):
         self.eigenFunctionSlider = ttk.Scale(altFigSettingsContainer,orient="h",from_=0,to=90,variable = self.eigenNum, command = lambda x: self.altGraphSliderCallback((fnum,cNum)) )
         self.eigenFunctionSlider.pack(expand=True,fill=tk.BOTH)
 
+        # Button for controlling altgraph output
+
+        self.altGraphType = tk.IntVar()
+        energyBasis = ttk.Radiobutton(altFigSettingsContainer,text = "psi in H basis",variable=self.altGraphType,value=0); energyBasis.pack(side = tk.RIGHT)
+        
         
     def presetCallback(self,*args,**kwargs):
         self.textPsi.set(self.presetDictionary[self.preset.get()][0])
@@ -294,36 +299,12 @@ class MainPage(tk.Frame):
 
 
     def toggleXKCD(self):
-        plt.xkcd()
-        self.psiFig = mpl.figure.Figure(figsize=(8,4), dpi=100)
-        self.anim = Animator(self.myPart,self.psiFig)
+        xkcd()# function is still broken, since funcanimation does not terminate
+        #self.psiFig = mpl.figure.Figure(figsize=(8,6), dpi=100)
+        #self.anim = Animator(self.myPart,self.psiFig)
 
 
 
-class Slider(tk.Frame):
-    def __init__(self, parent=None ):
-        tk.Frame.__init__(self, parent)
-        self.number = 0
-        self.slide= ttk.Scale(self)
-        # self.slide = tk.Scale(self, orient="v", command=self.setValue,
-        #                    length=200, sliderlength=20, resolution = .01,
-        #                    showvalue=0, tickinterval=2,
-        #                    fro=-2, to=2, font=('Arial',9))
-        self.text = tk.Label(self, font=('Arial',18))
-        self.slide.pack(side=tk.RIGHT, expand=1, fill=tk.X)
-        self.text.pack(side=tk.TOP, fill=tk.BOTH)
-        #self.unimap = {'4':u'\u2074','5':u'\u2075','6':u'\u2076',
-        #               '7':u'\u2077','8':u'\u2078','9':u'\u2079'}
-
-    def setValue(self, val):
-        self.number = (10**(int(val)))
-        self.text.configure(text='10%s' %0)
-
-
-# class ButtonDraw():
-#     def __init__(self,drawingGraph,master):
-
-#
 # Remember to cut window off
 #
 class DrawableGraph(FigureCanvasTkAgg):
@@ -336,8 +317,10 @@ class DrawableGraph(FigureCanvasTkAgg):
         self.b2 = "up"
         self.x1old,self.y1old = None,None
         self.x2old,self.y2old = None,None
-        self.psiXlist,self.psiYlist = -1*np.ones(self.cWidth),575*np.ones(self.cWidth)
-        self.VXlist,self.VYlist = -1*np.ones(self.cWidth),575*np.ones(self.cWidth)
+        self.yCenter = 203 # center of the psiGraph in pixels
+        self.yScale = -80. # Number of pixels from 0 to 1, takes into account reversed directions
+        self.psiXlist,self.psiYlist = -1*np.ones(self.cWidth),self.yCenter*np.ones(self.cWidth)
+        self.VXlist,self.VYlist = -1*np.ones(self.cWidth),self.yCenter*np.ones(self.cWidth)
         self.oldPsi = None # stores psYlist and 
         self.oldV = None   # VYlist  for modification
         self.get_tk_widget().bind("<Motion>", self.motion)
@@ -362,12 +345,12 @@ class DrawableGraph(FigureCanvasTkAgg):
         self.b2 = "up"
         self.x1old,self.y1old = None,None
         self.x2old,self.y2old = None,None
-        self.psiXlist,self.psiYlist = -1*np.ones(self.cWidth),575*np.ones(self.cWidth)
-        self.VXlist,self.VYlist = -1*np.ones(self.cWidth),575*np.ones(self.cWidth)
+        self.psiXlist,self.psiYlist = -1*np.ones(self.cWidth),self.yCenter*np.ones(self.cWidth)
+        self.VXlist,self.VYlist = -1*np.ones(self.cWidth),self.yCenter*np.ones(self.cWidth)
         self.get_tk_widget().delete("line")
         # Apply tukey window function to psi
-        pwY = tukey(620,alpha=.1)*(pY[100:720]-575)/85.
-        vwY = vY[100:720]-575
+        pwY = tukey(620,alpha=.1)*(pY[100:720]-self.yCenter)/self.yScale
+        vwY = vY[100:720]-self.yCenter
         dasCurves = np.array([pwY,vwY])
         thresholdPsi = np.sum(pX[100:720])>-610
         thresholdV = np.sum(vX[100:720])>-610
@@ -386,8 +369,8 @@ class DrawableGraph(FigureCanvasTkAgg):
             self.b2 = "down"           #
             self.get_tk_widget().config(cursor="tcross")
             #globalV.pause() # 
-            #print event.x,event.y
-
+            print event.x,event.y
+            print self.get_tk_widget().winfo_height()
 
     def b1up(self, event):
         self.b1 = "up"
@@ -410,7 +393,7 @@ class DrawableGraph(FigureCanvasTkAgg):
     def linearInterpRem(self,coords):
         xold,yold,xnew,ynew=coords
         slope = (ynew-yold)/float(xnew-xold)
-        return lambda x: self.cHeight - ((x-xold)*slope + yold) #Switch up down
+        return lambda x: ((x-xold)*slope + yold) #Switch up down
 
     def motion(self,event):
         if (self.b1 == "down") and self.inBounds(event.x,event.y):
@@ -423,7 +406,7 @@ class DrawableGraph(FigureCanvasTkAgg):
                 if color == "black" and self.x1old!=event.x:
                     coords = self.x1old,self.y1old,event.x,event.y
                     xinRange = np.arange(self.x1old,event.x+1)
-                    self.psiXlist[self.x1old:event.x+1] = 1#xinRange
+                    self.psiXlist[self.x1old:event.x+1] = 1
                     self.psiYlist[self.x1old:event.x+1] = self.linearInterpRem(coords)(xinRange)
             self.x1old = event.x
             self.y1old = event.y
@@ -438,7 +421,7 @@ class DrawableGraph(FigureCanvasTkAgg):
                 if color == "blue" and self.x2old != event.x:
                     coords = self.x2old,self.y2old,event.x,event.y
                     xinRange = np.arange(self.x2old,event.x+1)
-                    self.VXlist[self.x2old:event.x+1] = 1#xinRange
+                    self.VXlist[self.x2old:event.x+1] = 1
                     self.VYlist[self.x2old:event.x+1] = self.linearInterpRem(coords)(xinRange)
             self.x2old = event.x
             self.y2old = event.y
