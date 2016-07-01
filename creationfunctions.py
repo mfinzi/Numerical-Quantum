@@ -43,9 +43,9 @@ def getFunctionFromText(textVariable):
         tkMessageBox.showwarning("Syntax Error",
             "Base python expressions and numpy functions only,\n"\
             "Example gaussian psi:     50*exp(-(x-3)**2/3 + 5*1j)\n"\
-            " Or you could use the gaussian function: gaussian(x0=3,width=sqrt(3),vel=5)"
+            " Or you could use the gaussian function: gaussian(x0=3,width=sqrt(3),vel=5)\n"
             "Example Small Square well:    ((x<-5)|(x>5))*100\n"\
-            " Or you could use the function: squareBarr(x0=0,width=10,height=-100)"
+            " Or you could use the function: squareBarr(x0=0,width=10,height=-100)\n"
             "alternate way for making the well, (it goes down this time):\n"\
             " (x>-5)*(x<5)*-100")
         return None

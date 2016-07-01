@@ -61,15 +61,22 @@ class Animator(object):
         x = self.particle.X
         #y = self.particle.computePsiStarPsi(time*.01)
         
-        if not globalV.paused:
+        if not globalV.paused and not self.displayType&2:
             self.particle.solver.fullStep(self.particle)
             #print "this step is %.7f" %(time.time()-self.ass)
-        if self.displayType == 0:
+
+        if self.displayType&2 and self.particle.solver.name=="eigen":
+            self.psiLine.set_data(np.arange(self.particle.N/4),self.particle.solver.eigenEnergies[:self.particle.N/4])
+            self.psiVxLine.set_data(x,0)
+            #self.psiLine.set_marker('o')
+
+        else:
+            if not self.displayType&1:
                 y= np.real(self.particle.getPsi_st_psi())
-        else: y = np.real(self.particle.getPsi())
+            else: y = np.real(self.particle.getPsi())
     
-        self.psiLine.set_data(x,y)
-        self.psiVxLine.set_data(x,.01*self.particle.Vx)
+            self.psiLine.set_data(x,y)
+            self.psiVxLine.set_data(x,.01*self.particle.Vx)
         #print "this step is %.7f" %(time.time()-t0)
         #self.txtBox.set_text('<E> = %.3f' %self.particle.getExpectedEnergy())
 
@@ -103,7 +110,7 @@ class Animator(object):
 
     def animate(self):
         self.anim = animation.FuncAnimation(self.psiFig, self.update_line, #true
-                    init_func=self.inits, frames=1000000, interval=15, blit=True,repeat = False)
+                    init_func=self.inits, frames=1000000, interval=20, blit=True,repeat = False)
 
         
 
@@ -115,3 +122,21 @@ class Animator(object):
 
     def switchDisplayType(self):
         self.displayType^=1
+
+    def energyDisplaySwitch(self):
+        self.displayType^=2
+        self.switchInterp()
+
+    def switchInterp(self):
+        self.displayType^=4
+        if self.displayType&4:
+            self.psiLine.set_marker('o')
+            self.altLine.set_marker('o')
+        else:
+            self.psiLine.set_marker(None)
+            self.altLine.set_marker(None)
+
+        labels = [item.get_text() for item in self.psiAxe.get_xticklabels()]
+        print labels
+        labels[2] = u'1'
+        self.psiAxe.set_xticklabels(labels)

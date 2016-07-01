@@ -2,6 +2,7 @@ import time,sys
 import numpy as np
 from scipy.fftpack import fft, ifft
 from scipy.misc import factorial
+from scipy.integrate import simps
 
 from operators import *
 
@@ -48,6 +49,7 @@ class Particle1d(object):
 			if (key=="SOLVER"): 			# Change the solver type
 				self.solverClass = value 
 			if (key == "psi"):
+				resize = True
 				resolve = True
 			if (key == "Vx"):
 				resize = True
@@ -67,6 +69,7 @@ class Particle1d(object):
 		if resolve:
 			try: self.solver = self.solverClass(self) # Recreate the solver
 			except: print "not a valid solver",sys.exc_info()
+			print "my name is bob"
 
 	def step(self):
 		self.solver.fullStep(self)
@@ -97,7 +100,65 @@ class BaseSolver(object):
 		return particle.xOp.expValue(particle.psi)
 
 
-class SplitStepper1d(BaseSolver):
+class SplitStepper1d(BaseSolver): #Kdv version
+	""" Implements the Split Step Fourier method, which is well explained in Jake VanderPlas's blog
+		at https://jakevdp.github.io/blog/2012/09/05/quantum-python/ """
+	def __init__(self,P):
+		self.name="split"
+		self.fPsi = None
+		# Since <k>=<p>/hbar we can do this
+		self.k0 = P.momOp.expValue(P.psi)/P.hbar
+
+		self.dk = 2*np.pi/P.Lx
+		self.kx = np.array([np.arange(0,P.N/2),np.arange(-P.N/2,0)]).ravel()*self.dk#+self.k0
+		self.stepsPerStep = 200
+		self.subDt = P.dt/self.stepsPerStep
+		#Precompute the halfStepX exponential
+		self.halfXOperation = np.exp(P.Vx*(-1j*self.subDt/(2*P.hbar)))
+		#Precompute the quarterStepK exponential
+		self.quarterKOperation = np.exp((.001*self.kx**3 - self.kx)*self.subDt*1j)
+	def halfStpX(self,P):
+		# We simply perform the Vx (diagonal) operation in x space
+		P.psi *= np.exp( self.subDt*(-np.gradient(P.psi,P.dx))/2)
+
+	def quarterStpK(self,P):
+
+		# Recenter Psi in k space, shift fpsi backwards by k0, fpsi(k) -> fpsi(k+k0)
+		self.fPsi = fft(P.psi*np.exp(-1j*self.k0))/np.sqrt(2*np.pi)
+		# Then account for that shifting in self.kx by adding in self.k0
+		#self.kx -=self.k0
+		# Perform the kinetic energy T step in fourier space
+		self.fPsi *= self.quarterKOperation
+		# Then bring kx back to its unshifted array
+		
+		
+		#print self.k0
+		#print np.vdot(self.fPsi,self.fPsi)*self.dk
+		#self.kx -= self.k0
+		#print self.k0
+		# Finally we update psi, undoing the kspace shift
+		P.psi = ifft(self.fPsi)*np.exp(+1j*self.k0)*np.sqrt(2*np.pi)
+
+		#self.kx-=self.k0
+		# Update k0 while we are in k space 
+		self.k0 = self.getExpectedMomentum(P)/P.hbar
+		#print self.k0
+		
+		#self.kx+=self.k0
+
+	def fullStep(self,particle):
+		for i in np.arange(self.stepsPerStep):
+			particle.t+=self.subDt
+			self.halfStpX(particle);
+			self.quarterStpK(particle);
+			self.halfStpX(particle);
+
+	def getExpectedMomentum(self,particle):
+		""" Slightly more efficient O(2n) implementation since p is diagonal in kspace"""
+		return np.real(np.vdot(self.fPsi,self.fPsi*self.kx))*self.dk
+
+
+class SplitStepper1dorig(BaseSolver): # THe original version
 	""" Implements the Split Step Fourier method, which is well explained in Jake VanderPlas's blog
 		at https://jakevdp.github.io/blog/2012/09/05/quantum-python/ """
 	def __init__(self,P):
@@ -155,6 +216,7 @@ class SplitStepper1d(BaseSolver):
 		return np.real(np.vdot(self.fPsi,self.fPsi*self.kx))*self.dk
 
 
+
 class PropogateSolver1d(BaseSolver):
 	""" There is some numerical instability, need to investigate further"""
 	def __init__(self,particle):
@@ -162,7 +224,7 @@ class PropogateSolver1d(BaseSolver):
 
 	def fullStep(self,particle):
 		"""Uses the the taylor expansion to the matrix exponential
-			for dt << 1, it approximates exp(-itH/hbar)psi =  psi - it/hbar Hpsi +...
+			for dt << 1, it approximates exp(-idtH/hbar)psi =  psi - idt/hbar Hpsi -...
 			according to the matrExpApproxOrder"""
 		particle.t+=particle.dt 			
 		temporaryPsi = np.copy(particle.psi)  # We don't want a reference to psi
@@ -191,6 +253,7 @@ class EigenSolver1d(BaseSolver):
 
 	def computeEigenBasis(self,particle):
 		t0 = time.time()
+		#particle.hamOp.updateERanges(particle)
 		Es,basis = particle.hamOp.computeEigenFunctions()
 		
 		print "\n Computation time is %.3fs with %d eigenFunctions used" \
@@ -199,11 +262,12 @@ class EigenSolver1d(BaseSolver):
 
 	def transformToEigenBasis(self,P):
 		    #no need for conj here since eigenbasis is real
-		basisCoeffs = np.dot(self.eigenBasis.T,P.psi)*P.dx
+		#basisCoeffs = np.dot(self.eigenBasis.T,P.psi)*P.dx
+		basisCoeffs = simps(np.conj(self.eigenBasis.T)*P.psi,dx=P.dx)
 		return basisCoeffs     #Again, innerProduct = dotProduct * h
 
 	def trimBasis(self):
-		arrayMask = np.absolute(self.basisCoeffs)>1e-7
+		arrayMask = np.absolute(self.basisCoeffs)**2>1e-8
 		reducedBasis = self.eigenBasis.T[arrayMask].T
 		reducedEs = self.eigenEnergies[arrayMask]#make sure to test this
 		reducedCoeffs = self.basisCoeffs[arrayMask]

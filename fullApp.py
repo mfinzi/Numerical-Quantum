@@ -111,6 +111,7 @@ class MainPage(tk.Frame):
                                 'Barrier Partial Reflection':("gaussian(-5,1,10)(x)","squareBarr(x0=0.1,width=.2,height=100)(x)"),
                                 'Airy functions':("gaussian(-5,1,13)(x)","15*x"),
                                 'Harmonic Oscillator':("gaussian(0,2,5)(x)",".5*x**2"),
+                                'Coherent State w = 2':("gaussian(6/sqrt(2),1/sqrt(2),0)(x)",".5*4*x**2"),
                                 'Abs(x) with Bumps':("(x>-4)*(x<0)*(np.exp(1j*8*x)/np.sqrt(2))*(np.sin(np.pi*x/2))","8*abs(x)+(x<7)*(x>5)*50*(5-x)*(x-7)-(x<-5)*(x>-7)*50*(-5-x)*(-x-7)"),
                                 'Coulomb Like':("gaussian(3,1,-12)(x)","-80/(.25*(x-3)**2+.5)-120/(.25*(x+3)**2+.5)")
                                  }
@@ -130,11 +131,12 @@ class MainPage(tk.Frame):
         kSlider = ttk.Scale(drawControlsContainer,orient="h",from_=-30,to=30,variable=self.startingK)
         kSlider.pack()
 
-        displayOptionsContainer = tk.Frame(animOptionsContainer, relief = "sunken"); displayOptionsContainer.pack()
+        displayOptionsContainer = tk.Frame(animOptionsContainer, relief = "sunken"); displayOptionsContainer.pack(expand=True,fill=tk.X)
         dispTypeButton = ttk.Button(displayOptionsContainer,text='Display Re{'+globalV.uniPsi+'}', command = self.anim.switchDisplayType)
         dispTypeButton.pack(side=tk.LEFT)
-        XKCDButton = ttk.Button(displayOptionsContainer, text="XKCD", command=self.toggleXKCD); XKCDButton.pack(side=tk.RIGHT)
-        
+        #XKCDButton = ttk.Button(displayOptionsContainer, text="XKCD", command=self.toggleXKCD); XKCDButton.pack(side=tk.RIGHT)
+        EnergyButton = ttk.Button(displayOptionsContainer, text="Energies", command=self.anim.energyDisplaySwitch); EnergyButton.pack(side = tk.LEFT)
+        interpButton = ttk.Checkbutton(displayOptionsContainer,variable=None, command=self.anim.switchInterp); interpButton.pack(side=tk.RIGHT)
 
 
 
@@ -176,10 +178,11 @@ class MainPage(tk.Frame):
         
         stencilContainer = tk.Frame(solverSettingsContainer); stencilContainer.pack(side = tk.LEFT)
         stencilDescription = ttk.Label(stencilContainer,text="Hamiltonian Stencil"); stencilDescription.pack()
-        self.numSTerms = tk.IntVar(); self.numSTerms.set(1)
+        self.numSTerms = tk.IntVar(); self.numSTerms.set(2)
         stencil3Button = ttk.Radiobutton(stencilContainer,text = "3 Term",variable = self.numSTerms, value = 1); stencil3Button.pack()
         stencil5Button = ttk.Radiobutton(stencilContainer,text = "5 Term",variable = self.numSTerms, value = 2); stencil5Button.pack()
         stencil7Button = ttk.Radiobutton(stencilContainer,text = "7 Term",variable = self.numSTerms, value = 3); stencil7Button.pack()
+        stencil9Button = ttk.Radiobutton(stencilContainer,text = "9 Term",variable = self.numSTerms, value = 4); stencil9Button.pack()
 
         #Todo: fix placement of Nscale
         nContainer = tk.Frame(solverSettingsContainer, relief = "sunken"); nContainer.pack(side = tk.RIGHT)

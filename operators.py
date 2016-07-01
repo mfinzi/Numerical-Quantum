@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.linalg import eig,eigh,eig_banded
+from scipy.integrate import simps
 
 # Operator and Derivative classes are used in the Finite Difference Eigen
 #  decomposition solver and the propogate solver
@@ -32,11 +33,13 @@ class Operator(object):
 
 	def expValue(self,vector):
 		""" as you would expect, \int_{-\inf}^{\inf} \psi^* A_{op} \psi dx"""
-		return np.real(np.vdot(vector,self.operate(vector)))*self.dx
+		#return np.real(np.vdot(vector,self.operate(vector)))*self.dx
+		return simps(np.conj(vector)*self.operate(vector),dx=self.dx)
 
 	def uncertainty(self,vector):
 		""" as you would expect, \int_{-\inf}^{\inf} \psi^* A_{op} \psi dx"""
-		expASqrd = np.real(np.vdot(vector,self.operate(self.operate(vector))))*self.dx
+		#expASqrd = np.real(np.vdot(vector,self.operate(self.operate(vector))))*self.dx
+		expASqrd = simps(np.conj(vector)*self.repOperate(vector,2),dx = self.dx)
 		return np.sqrt(expASqrd - self.expValue(vector)**2)
 
 	def computeEigenFunctions(self):
@@ -64,9 +67,9 @@ class BandedOp(Operator): #Must also be hermitian
 		return True
 
 	def computeEigenFunctions(self,jRange=None):
-		if jRange: sel='v'
+		if jRange: sel='i'
 		else: sel ='a' 
-
+		#sel = 'a'
 		lambdas,basis = eig_banded(self.bandedMatrix,lower=True, check_finite=False,
 					overwrite_a_band=True, select=sel, select_range = jRange)
 		basis/=np.sqrt(self.dx) #For normalization
@@ -115,15 +118,18 @@ class MomentumOp(BandedOp):
 
 class HamiltonianOp(BandedOp):
 
-	STENCIL_TABLE = np.array([-2.0,1.0,-5/2.,4/3.,\
-					-1/12.,-49/18.,3/2.,-3/20.,1/90.])
-	SIGMA_CUTOFF = 10
+	STENCIL_TABLE = np.array([-2.0,1.0,
+							-5/2.,4/3.,-1/12.,
+							-49/18.,3/2.,-3/20.,1/90.,
+							-205/72.,8/5.,-1/5.,8/315.,-1/560.])
+	SIGMA_CUTOFF = 30
 
 	def __init__(self,particle):
 		self.dx = particle.dx
 		self.bandedMatrix = self.getDiagonals(particle)
-		self.cutOffEnergy = self.expValue(particle.psi)+\
-			HamiltonianOp.SIGMA_CUTOFF*self.uncertainty(particle.psi)#+50??
+		#self.cutOffEnergys = (np.real(self.expValue(particle.psi))+ HamiltonianOp.SIGMA_CUTOFF*self.uncertainty(particle.psi),
+		#??						np.real(self.expValue(particle.psi)) - HamiltonianOp.SIGMA_CUTOFF*self.uncertainty(particle.psi)
+		self.ERanges = self.updateERanges(particle)
 		#print self.cutOffEnergy
 		#print self.expValue(particle.psi)
 	#I could make further optimization by overriding operate with specialized
@@ -142,5 +148,10 @@ class HamiltonianOp(BandedOp):
 		return diagArray
 
 	def computeEigenFunctions(self):
-		eRange =(-np.inf,self.cutOffEnergy)
-		return super(HamiltonianOp,self).computeEigenFunctions(eRange)
+		return super(HamiltonianOp,self).computeEigenFunctions(self.ERange)
+
+	def updateERanges(self,particle):
+		expEnergy = np.real(self.expValue(particle.psi))
+		width = max(2*HamiltonianOp.SIGMA_CUTOFF,HamiltonianOp.SIGMA_CUTOFF*self.uncertainty(particle.psi))
+		self.ERange = (0,particle.N/2)#(-np.inf,expEnergy+width)
+		print self.ERange
