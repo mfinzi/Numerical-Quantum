@@ -1,9 +1,9 @@
 import time #, thread
 import numpy as np;
-import matplotlib as mpl
+
 from matplotlib import animation;
-mpl.use("TkAgg")
-from matplotlib import pyplot as plt;
+from matplotlib import pyplot as plt
+from matplotlib import gridspec
 
 import globalV
 import solvers
@@ -18,9 +18,9 @@ class Animator(object):
     	# Setup the figures
         
         self.psiFig = mainFig
-
-        self.psiAxe = self.psiFig.add_subplot(211)
-        self.altAxe = self.psiFig.add_subplot(212)
+        grid = gridspec.GridSpec(2,1,height_ratios = [4,3])
+        self.psiAxe = self.psiFig.add_subplot(grid[0])#211)
+        self.altAxe = self.psiFig.add_subplot(grid[1])#212)
 
         # Graph is scaled based on the initial height of psi, and the x bounds
         peakPsi = max([-1*np.min(np.absolute(particle.psi)),np.max(np.absolute(particle.psi))])**2
@@ -110,7 +110,11 @@ class Animator(object):
 
     def animate(self):
         self.anim = animation.FuncAnimation(self.psiFig, self.update_line, #true
+<<<<<<< HEAD
                     init_func=self.inits, frames=1000000, interval=20, blit=True,repeat = False)
+=======
+                    init_func=self.inits, frames=1000000, interval=33.3, blit=True,repeat = False)
+>>>>>>> origin/master
 
         
 

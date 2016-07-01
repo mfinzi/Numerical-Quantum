@@ -35,7 +35,7 @@ build_exe_options = {
 	'excludes' : ['collections.sys',
 				  'collections._weakref'],
 	'include_files' : includeList,
-	"packages":['Tkinter','matplotlib'],
+	"packages":[],
 	"icon":["ih.ico"]
 }
 
